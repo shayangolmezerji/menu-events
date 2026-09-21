@@ -128,11 +128,11 @@ def test_the_log_refuses_to_be_edited_or_emptied(handler, store, stream_id, menu
     handler.handle(add_item(menu_id, uuid.uuid4()))
 
     with psycopg.connect(DSN, autocommit=True) as conn:
-        with pytest.raises(psycopg.InsufficientPrivilege, match="append-only"):
+        with pytest.raises(psycopg.errors.InsufficientPrivilege, match="append-only"):
             conn.execute(
                 "UPDATE events SET payload = payload WHERE stream_id = %s", (stream_id,)
             )
-        with pytest.raises(psycopg.InsufficientPrivilege, match="append-only"):
+        with pytest.raises(psycopg.errors.InsufficientPrivilege, match="append-only"):
             conn.execute("DELETE FROM events WHERE stream_id = %s", (stream_id,))
 
     [envelope] = store.read(stream_id)
