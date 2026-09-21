@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "menu-events"
+version = "0.1.0"
+description = "Append-only menu event store with optimistic concurrency and replayable projections"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+    { name = "Shayan Golmezerji", email = "121007462+shayangolmezerji@users.noreply.github.com" },
+]
+dependencies = [
+    "psycopg[binary]>=3.2",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/menu_events"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "W",   # pycodestyle whitespace
+    "F",   # pyflakes
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "I",   # isort
+    "N",   # naming
+    "SIM", # simplify
+    "C4",  # comprehensions
+    "PT",  # pytest style
+    "RET", # early returns
+    "T20", # no print
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PT006", "PT007"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--strict-markers"
+markers = [
+    "integration: talks to a real PostgreSQL server, skipped when none is reachable",
+]
+
+[tool.coverage.run]
+source = ["menu_events"]
