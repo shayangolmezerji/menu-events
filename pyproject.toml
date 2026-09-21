@@ -15,7 +15,6 @@ authors = [
 dependencies = [
     "psycopg[binary]>=3.2",
     "pydantic>=2.8",
-    "pydantic-settings>=2.4",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +47,9 @@ select = [
     "RET", # early returns
     "T20", # no print
 ]
+# N818 would rename every rejection to a suffixed form. These read as
+# statements the caller matches on: ConcurrencyConflict, ItemNotOnMenu.
+extend-ignore = ["N818"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["PT006", "PT007"]

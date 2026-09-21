@@ -16,9 +16,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from .events import (
     DescriptionEdited,
     ItemBackInStock,
-    MenuItemAdded,
     ItemSoldOut,
     MenuEvent,
+    MenuItemAdded,
     PriceChanged,
 )
 

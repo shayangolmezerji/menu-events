@@ -18,9 +18,9 @@ from .errors import (
 from .events import (
     DescriptionEdited,
     ItemBackInStock,
-    MenuItemAdded,
     ItemSoldOut,
     MenuEvent,
+    MenuItemAdded,
     PriceChanged,
     parse_menu_event,
 )

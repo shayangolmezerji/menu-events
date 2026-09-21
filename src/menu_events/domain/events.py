@@ -10,7 +10,7 @@ get it right.
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
@@ -79,13 +79,7 @@ class ItemBackInStock(EventBase):
 
 
 MenuEvent = Annotated[
-    Union[
-        MenuItemAdded,
-        PriceChanged,
-        DescriptionEdited,
-        ItemSoldOut,
-        ItemBackInStock,
-    ],
+    MenuItemAdded | PriceChanged | DescriptionEdited | ItemSoldOut | ItemBackInStock,
     Field(discriminator="event_type"),
 ]
 
