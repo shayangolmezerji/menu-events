@@ -63,7 +63,7 @@ pip install -e ".[dev,api]"
 pytest
 ```
 
-On a machine with no database the last line reports `100 passed, 13 skipped`. The 13 skips are the PostgreSQL tier; see [Testing](#testing). Without the `api` extra the HTTP tier skips too and the line reads `63 passed, 50 skipped`. To lint:
+On a machine with no database the last line reports `100 passed, 15 skipped`. The 15 skips are the PostgreSQL tier; see [Testing](#testing). Without the `api` extra the HTTP tier skips too and the line reads `63 passed, 52 skipped`. To lint:
 
 ```bash
 ruff check .
@@ -367,7 +367,7 @@ Three tiers, and two of them need no server. The unit tier runs the whole portab
 The HTTP tier drives `menu_events.api` in process over that same store. No port is bound and no host is resolved. It submits every command the domain has, covers each endpoint and each status the error mapping can answer with, and shows a stale write losing over the wire rather than only in process. Where the `api` extra is not installed the tier skips instead of erroring: the package imports no web framework, so a test run should not claim a machine has one.
 
 ```bash
-pytest                      # 100 passed, 13 skipped with no database
+pytest                      # 100 passed, 15 skipped with no database
 pytest tests/unit           # the portable core
 pytest tests/api            # the HTTP tier
 pytest -m "not integration" # everything a machine without a server can run
@@ -379,9 +379,11 @@ The two tiers that need no server are executed on any machine, and every Python 
 
 The HTTP transcripts came from a process, not a test client. `uvicorn --factory menu_events.api:create_app` was started on a localhost port, every request and response quoted above is what that exchange carried, and the server's own access log shows the 200s, the 409, the two 404s and the 422. What has not been served is the app over `PostgresEventStore`: the factory was only ever handed the in-memory adapter here.
 
-The PostgreSQL tier has been run. All 13 tests passed on 2026-09-24 against PostgreSQL 16.15 in a throwaway container, so the SQL in `store/postgres.py` and `projections/postgres.py` has been executed, and so has the append-only trigger that `migrations/0001_event_store.sql` calls the load-bearing half: it refused `UPDATE` and `DELETE` for a superuser, whom grants cannot bind. A green run with no database still proves nothing about those files, because the tier skips while `MENU_EVENTS_TEST_DSN` is unset. Contention is the part the run did not reach. Every test there is one writer at a time, so the advisory lock has been taken and released by real transactions and never raced, and the concurrency argument in `store/postgres.py` still rests on the unit tier's in-memory version of it.
+The PostgreSQL tier has been run. All 15 tests passed on 2026-09-24 against PostgreSQL 16.15 in a throwaway container, so the SQL in `store/postgres.py` and `projections/postgres.py` has been executed, and so has the append-only trigger that `migrations/0001_event_store.sql` calls the load-bearing half: it refused `UPDATE` and `DELETE` for a superuser, whom grants cannot bind. A green run with no database still proves nothing about those files, because the tier skips while `MENU_EVENTS_TEST_DSN` is unset.
 
-The workflow is defined, not executed. Nothing has been pushed, so no job has produced a result, and the file starts no database: a green there would carry exactly the weight described above, and no more. Every command in it was run locally on 3.13: the install line, `ruff check .`, the import check, and one `pytest` run per tier, which is how the integration tier's 13 skips are known to be skips and not failures returning zero. No linter for the workflow file itself is installed here, so `ci.yml` was parsed and read but never checked by `actionlint` or `yamllint`. No 3.12 interpreter was available either, so the lower bound of the version range comes from `requires-python` and not from a run.
+Contention on the projection is measured now. `tests/integration/test_projection_concurrency_postgres.py` releases two writers from one barrier and repeats that eight times per test, over a stream that gains an event between the rounds. It asserts only what holds whichever writer reaches the lock first: both come back with the log's head rather than refusing, the checkpoint ends at that head, the projected rows end equal to a fold of the log, and no item appears twice. One test races `advance` against `advance`, the other against `rebuild`, since the two share a lock namespace. Take the advisory lock out of `projections/postgres.py` and that run goes red on `ReplayError` for an item added twice, in six patched runs out of six, which is the check that these tests answer to the lock and not to the table's own constraints. Two things it does not reach: every command in the tier is still written one at a time, so the concurrency argument in `store/postgres.py` rests on the unit tier's in-memory version of it, and no test has run a projector against a lock a command is holding.
+
+The workflow is defined, not executed. Nothing has been pushed, so no job has produced a result, and the file starts no database: a green there would carry exactly the weight described above, and no more. Every command in it was run locally on 3.13: the install line, `ruff check .`, the import check, and one `pytest` run per tier, which is how the integration tier's 15 skips are known to be skips and not failures returning zero. No linter for the workflow file itself is installed here, so `ci.yml` was parsed and read but never checked by `actionlint` or `yamllint`. No 3.12 interpreter was available either, so the lower bound of the version range comes from `requires-python` and not from a run.
 
 To exercise it, bring up a server and point the DSN at a scratch database. This machine has no `createdb` or `psql`, so the server and its client both come from the container:
 
