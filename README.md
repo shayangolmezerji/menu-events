@@ -374,7 +374,7 @@ The HTTP transcripts came from a process, not a test client. `uvicorn --factory 
 
 The PostgreSQL tier is not executed here. There is no server in the development environment, so `pytest` skips all 10 integration tests, and a green run without a database proves nothing about `store/postgres.py` or `projections/postgres.py`. The SQL, the append-only trigger, and the advisory-lock concurrency control in those files are unverified until someone runs the tier against a real server.
 
-The workflow is defined, not executed. Nothing has been pushed, so no job has produced a result, and the file starts no database: a green there would carry exactly the weight described above, and no more. Its three commands are the ones this page shows, and all three were run locally, on 3.13. No 3.12 interpreter was available here, so the lower bound of the version range comes from `requires-python` and not from a run.
+The workflow is defined, not executed. Nothing has been pushed, so no job has produced a result, and the file starts no database: a green there would carry exactly the weight described above, and no more. Every command in it was run locally on 3.13: the install line, `ruff check .`, the import check, and one `pytest` run per tier, which is how the integration tier's 10 skips are known to be skips and not failures returning zero. No linter for the workflow file itself is installed here, so `ci.yml` was parsed and read but never checked by `actionlint` or `yamllint`. No 3.12 interpreter was available either, so the lower bound of the version range comes from `requires-python` and not from a run.
 
 To exercise it, start a local PostgreSQL and point the DSN at a scratch database:
 

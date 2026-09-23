@@ -18,9 +18,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,api]"
       - name: Lint
         run: ruff check .
+      # The api tier skips instead of failing where fastapi is absent, so a green
+      # run there could mean the extra never resolved. Say which of the two it was.
+      - name: Check the api extra resolved
+        run: python -c "import fastapi, menu_events.api"
+      - name: Test the portable core
+        run: python -m pytest -q tests/unit
+      - name: Test the HTTP tier
+        run: python -m pytest -q tests/api
       # No database on the runner: the Postgres tier skips by design, not by accident.
-      - name: Test
-        run: python -m pytest -q
+      - name: Test the Postgres tier
+        run: python -m pytest -q tests/integration
