@@ -2,22 +2,33 @@
 
 from __future__ import annotations
 
+import itertools
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from conftest import MenuCommands, mixed_history
 from pydantic import ValidationError
 
-from menu_events import menu_stream_id
+from menu_events import InMemoryEventStore, MenuCommandHandler, menu_stream_id
 from menu_events.store.serialization import from_row, row_matches_checksum, to_row
 
+START = datetime(2026, 3, 14, 19, 30, tzinfo=UTC)
 
-def test_events_already_written_are_unchanged_by_events_written_after(
-    store,
-    handler,
-    stream_id,
-    commands,
-):
+
+def ticking_store(step: timedelta) -> InMemoryEventStore:
+    """A store whose clock moves. The fixture store pins one instant, which makes
+    every timestamp on a row inert: a write that restamped the rows already in the
+    log, or a read ordered by the clock instead of by the version, would look
+    identical through it.
+    """
+    ticks = itertools.count()
+    return InMemoryEventStore(clock=lambda: START + step * next(ticks))
+
+
+def test_events_already_written_are_unchanged_by_events_written_after(stream_id, commands):
+    store = ticking_store(timedelta(seconds=1))
+    handler = MenuCommandHandler(store)
     fries, bread = uuid.uuid4(), uuid.uuid4()
     for command in (
         commands.add(fries, 0),
@@ -44,6 +55,35 @@ def test_read_returns_the_stream_in_version_order_and_from_a_point(
     assert [envelope.version for envelope in store.read(stream_id)] == list(range(1, 10))
     assert [envelope.version for envelope in store.read(stream_id, from_version=7)] == [8, 9]
     assert store.read(menu_stream_id(uuid.uuid4())) == []
+
+
+def test_a_clock_that_runs_backwards_does_not_reorder_the_read():
+    """``store/base.py`` promises a stream comes back ordered by version and says
+    a timestamp never does that work, because events committed together share one.
+    Through the fixture store the two orders are identical, so only a clock running
+    the other way can tell them apart. The writes bypass the handler: a reordered
+    read trips the fold there before the read order is ever asserted.
+    """
+    store = ticking_store(-timedelta(minutes=10))
+    menu_id = uuid.uuid4()
+    stream_id = menu_stream_id(menu_id)
+    commands = MenuCommands(menu_id=menu_id)
+
+    items = [uuid.uuid4() for _ in range(3)]
+    for version, item in enumerate(items):
+        store.append(
+            stream_id=stream_id,
+            expected_version=version,
+            event=commands.add(item, version).to_event(),
+            command_id=uuid.uuid4(),
+        )
+
+    read = list(store.read(stream_id))
+
+    stamps = [envelope.recorded_at for envelope in read]
+    assert stamps == sorted(stamps, reverse=True)
+    assert [envelope.version for envelope in read] == [1, 2, 3]
+    assert [envelope.event.item_id for envelope in read] == items
 
 
 def test_a_stream_holds_one_menu_only(handler, store, stream_id, commands):
