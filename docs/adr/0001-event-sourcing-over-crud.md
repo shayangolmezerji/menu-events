@@ -7,10 +7,20 @@ Accepted. 2026-09-22.
 What has been executed is not all of what is argued here. The version rule, the
 idempotency rule and the fold run in the unit tier, against the in-memory adapter, and
 they run again over HTTP in the api tier, in process.
-The PostgreSQL claims, meaning the trigger, the grants, the advisory lock and the
-one-transaction atomicity of a write, are read out of `migrations/` and the two
-adapters against psycopg's documented behaviour. No server has run them: the tier
-that would, `tests/integration/`, skips wherever `MENU_EVENTS_TEST_DSN` is unset.
+
+The PostgreSQL tier has run since this record was accepted. Fifteen tests on
+PostgreSQL 16.15 on 2026-09-24, both migrations applied through psycopg, most recently
+on the `postgres:16.15-alpine` image `ci.yml` names. That reaches the append-only
+trigger, which refused an `UPDATE` and a `DELETE` from a superuser that grants could
+not have bound, the no-partial-write on a refused append, the projector's own
+transaction rolling back whole, and the projection advisory lock under two writers on
+one stream.
+
+Two claims above are still read rather than run. Nothing connects as `menu_app`, so the
+`REVOKE UPDATE, DELETE, TRUNCATE` in `migrations/0001_event_store.sql` has never been
+the thing that stopped a statement: the tier proves only the trigger beneath it. And
+`store.append` has never faced two writers at once, so its lock-then-check argument
+rests on the unit tier's in-memory version of the same rule.
 
 ## Context
 
