@@ -30,6 +30,12 @@ jobs:
         ports:
           # Steps of a job running on the runner machine reach service
           # containers at the mapped port on 127.0.0.1.
+          #
+          # trust is safe under one assumption: the runner is GitHub-hosted and
+          # lives and dies with this job. On a self-hosted or shared runner the
+          # same mapping publishes an unauthenticated superuser to that host's
+          # network, and nothing here stops that. Copy this service to a
+          # self-hosted job only with a password and a narrower role.
           - 5432:5432
         # GitHub waits for this health check before the first step, so the
         # tier never races server startup.
