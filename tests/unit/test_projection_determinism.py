@@ -173,6 +173,8 @@ def test_the_fold_leaves_the_state_it_was_given_alone(handler, store, stream_id,
     assert (early.version, late.version) == (3, 5)
     assert early.get(bread).description == ""
     assert late.get(bread).description == "Baked at 06:00, milled in state."
+    assert early.get(fries).sold_out is False
+    assert late.get(fries).sold_out is True
     assert late.items is not early.items
 
 
