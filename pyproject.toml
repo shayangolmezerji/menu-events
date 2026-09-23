@@ -59,6 +59,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "--strict-markers"
 markers = [
+    "api: drives menu_events.api in process, skipped when the api extra is missing",
     "integration: talks to a real PostgreSQL server, skipped when none is reachable",
 ]
 
