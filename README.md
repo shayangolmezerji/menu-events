@@ -63,7 +63,7 @@ pip install -e ".[dev,api]"
 pytest
 ```
 
-On a machine with no database the last line reports `94 passed, 10 skipped`. The 10 skips are the PostgreSQL tier; see [Testing](#testing). Without the `api` extra the HTTP tier skips too and the line reads `60 passed, 44 skipped`. To lint:
+On a machine with no database the last line reports `100 passed, 10 skipped`. The 10 skips are the PostgreSQL tier; see [Testing](#testing). Without the `api` extra the HTTP tier skips too and the line reads `63 passed, 47 skipped`. To lint:
 
 ```bash
 ruff check .
@@ -169,6 +169,14 @@ The replay reads the log back through `store.read` and folds it with `project`. 
 The last command was decided against version 1. The log is at version 4, so `store.append` refuses it with `ConcurrencyConflict` and writes no event. The caller re-reads and decides whether its intent still holds.
 
 Retrying a command that already landed is not a conflict. The handler matches on `command_id` before the version check, so a client that timed out and resent gets the original result back rather than a second event.
+
+### A price is bounded
+
+`price_cents` is minor units, whole, at least zero and at most `MAX_PRICE_CENTS`, which is 2**53 - 1 (`domain/commands.py`). That ceiling is the largest integer a JSON number survives as exactly, so the log, the `bigint` column the projector writes (`migrations/0002_projection.sql`) and a client parsing the read model all agree on the digits. It is a type limit rather than a business one. At ninety trillion dollars an item it is past anything a menu has carried, so it catches a mistyped price and refuses no real one.
+
+The check lives where a command is built, which is what makes the answer the same on either store: a body over the ceiling is one of the 422s `menu_events.api` already gives for a field the models refuse, and nothing is appended. Without it the refusal would come one step later and on one tier only, because `events.payload` is `jsonb` and holds any magnitude. A price too large for `menu_item.price_cents` would reach the log, be answered 200, and surface as a failed `INSERT` in whichever projection run carried that version.
+
+The read side does not repeat the check. That is a decision, not an oversight. An event already in the log cannot be edited or deleted, so a parser that refused one would leave its whole stream unreadable, including to the later command that would have superseded the price. A pre-bound value above BIGINT is therefore a projection failure and not a read failure. `advance` writes the item at every version in the tail, so it fails on the bad row and the checkpoint stays where it was; `rebuild` folds the stream first and writes where each item ended, so a correction on the stream is enough for it to succeed. Those last two sentences are read out of `projections/postgres.py`, which no server has run here.
 
 ### Over HTTP
 
@@ -344,7 +352,7 @@ Available at `/docs` (Swagger UI) or `/openapi.json`. The request schema shown t
 
 | Method | Path | What it answers | Status |
 |--------|------|-----------------|--------|
-| `POST` | `/commands` | the version the log reached, and whether this command wrote it | 200 applied, or already applied. 400 the menu says no. 404 no such stream. 409 lost the race. 422 not a command |
+| `POST` | `/commands` | the version the log reached, and whether this command wrote it | 200 applied, or already applied. 400 the menu says no. 404 no such stream. 409 lost the race. 422 a body the command models refuse |
 | `GET` | `/menu/{menu_id}` | the fold of the whole log, plus the version to claim | 200. 404 no such stream. 422 the path is not a UUID |
 | `GET` | `/menu/{menu_id}/events` | the log, oldest first. `from_version` excludes what the caller has seen | 200, possibly an empty list. 404 no such stream. 422 |
 
