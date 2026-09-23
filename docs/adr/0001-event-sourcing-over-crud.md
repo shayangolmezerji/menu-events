@@ -5,7 +5,8 @@
 Accepted. 2026-09-22.
 
 What has been executed is not all of what is argued here. The version rule, the
-idempotency rule and the fold run in the unit tier, against the in-memory adapter.
+idempotency rule and the fold run in the unit tier, against the in-memory adapter, and
+they run again over HTTP in the api tier, in process.
 The PostgreSQL claims, meaning the trigger, the grants, the advisory lock and the
 one-transaction atomicity of a write, are read out of `migrations/` and the two
 adapters against psycopg's documented behaviour. No server has run them: the tier
@@ -118,6 +119,41 @@ after. They share one database and one consistency boundary, which is the point,
 but they do not commit in a single transaction, and the read model is allowed to
 lag.
 
+## Redis, and what would move the answer
+
+No Redis, and no cache tier of any kind. The stack this repo was briefed under named
+Redis; nothing in the build uses it. `dependencies` is psycopg and pydantic, the `api`
+extra adds fastapi and uvicorn, and no module imports a Redis client.
+
+A cache in front of the read side reintroduces, one hop earlier, precisely the problem
+the write side exists to refuse. Every read answers with the version it folded from and
+a writer is expected to claim that version. Serve the read from something that can be
+behind the log and two things break at once: a writer holding the current version is
+refused against a stale one it never saw, and a writer holding a genuinely stale version
+is refused for the wrong reason, so a 409 stops being a reliable signal that a race was
+lost. Optimistic concurrency is only worth having if the version a reader was handed is
+the version the store held at that moment.
+
+`menu_projection` is the cache this design does keep, and it is honest about being one:
+it stores the version it folded to, so a consumer can tell a stale menu from a fresh one
+instead of guessing. A Redis layer would need the same discipline, would still not be
+the authority, and would add a third place the menu can disagree with the log.
+
+What would have to be measured before that answer changes:
+
+- The cost of the fold at the longest real stream. `GET /menu/{menu_id}` folds every
+  event of the stream in process, so it is O(events) per read. Measure p99 against the
+  stream a venue actually accumulates over a year, not a synthetic one.
+- Reads per menu against writes per menu. A cache pays only where reads outnumber writes
+  by enough that the folds it saves outweigh the false conflicts it creates.
+- Whether a cached answer can be validated at all for less than it costs to compute one.
+  A version-tagged entry is safe to return only once you know the head version, and the
+  read that fetches the head is the read the cache was meant to avoid.
+
+None of these are measured here, and no number for them is claimed anywhere in this
+repository: nothing has run against a server, so a figure quoted for a cache tier would
+be a guess dressed as an argument.
+
 ## Rejected alternatives
 
 - CRUD, one mutable row per item, plus `updated_by`/`updated_at`. Rejected: it
@@ -139,7 +175,7 @@ lag.
   correct but wasteful for a menu read constantly, and it couples read latency to
   stream length. A stored read model is cheap to maintain from the fold and is
   what a menu endpoint wants.
-- Redis as the store, from the portfolio stack adaptation. Not used: PostgreSQL
-  already holds the immutable log and the derived read model in one system, and a
-  Redis cache would open a third place the menu could be inconsistent. No cache
-  tier exists in this build.
+- Redis, both as the store and as the cache, from the portfolio stack adaptation.
+  Neither is used: PostgreSQL holds the immutable log and the derived read model in one
+  system, and a cache would open a third place the menu can be inconsistent. The
+  reasoning and the measurements that would change it are in the section above.
