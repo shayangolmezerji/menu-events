@@ -7,6 +7,12 @@ the same time as each other and as a command: neither can publish a snapshot of
 the log older than the one already stored, because the snapshot is taken after
 the lock is held and the lock is released only once the rows and the checkpoint
 are written.
+
+The fold behind both writers is tested event by event in
+:mod:`menu_events.projections.menu`. Moving the rows is not: with no server in the
+development environment, ``tests/integration/test_projection_postgres.py`` skips
+while ``MENU_EVENTS_TEST_DSN`` is unset, so the locking argument above has never
+met a database.
 """
 
 from __future__ import annotations

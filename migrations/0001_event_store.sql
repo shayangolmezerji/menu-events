@@ -83,8 +83,8 @@ BEGIN
 END;
 $$;
 
--- The role an application connects as. Set it in the DSN you deploy with; the
--- development credentials in .env.example are placeholders for a local server.
+-- The role an application connects as, named by the DSN you deploy with. The test
+-- tier reads MENU_EVENTS_TEST_DSN instead, and .env.example is its template.
 GRANT SELECT, INSERT ON events TO menu_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON events FROM menu_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON events FROM PUBLIC;

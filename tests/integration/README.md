@@ -19,3 +19,7 @@ Run it from the repository root so `pyproject.toml` supplies the marker
 registration and the import path. The log is append-only by design, so nothing
 here cleans up after itself: point the DSN at a database you are willing to
 drop, never at one holding data you want.
+
+`.env.example` at the repository root is the template for that variable. Nothing
+in the package reads the file, so the value has to reach the process environment
+before `pytest` starts.

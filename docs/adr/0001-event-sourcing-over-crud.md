@@ -4,6 +4,13 @@
 
 Accepted. 2026-09-22.
 
+What has been executed is not all of what is argued here. The version rule, the
+idempotency rule and the fold run in the unit tier, against the in-memory adapter.
+The PostgreSQL claims, meaning the trigger, the grants, the advisory lock and the
+one-transaction atomicity of a write, are read out of `migrations/` and the two
+adapters against psycopg's documented behaviour. No server has run them: the tier
+that would, `tests/integration/`, skips wherever `MENU_EVENTS_TEST_DSN` is unset.
+
 ## Context
 
 The service stores a restaurant menu that several terminals edit at the same

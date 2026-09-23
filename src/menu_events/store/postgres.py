@@ -11,6 +11,12 @@ read, then the insert. Serialising on the lock means two racing writers find
 out which one of them is late instead of both discovering it after a failed
 insert; the primary key on ``(stream_id, version)`` is the backstop for any
 writer that reached the table without the lock.
+
+None of that has been executed. There is no PostgreSQL server in the development
+environment, so ``tests/integration/test_event_store_postgres.py`` is written for
+these statements and skips while ``MENU_EVENTS_TEST_DSN`` is unset: every claim
+above is read out of the SQL and psycopg's documented behaviour, and none of it is
+measured.
 """
 
 from __future__ import annotations
