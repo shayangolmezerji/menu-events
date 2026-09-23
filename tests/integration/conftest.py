@@ -1,10 +1,12 @@
 """The PostgreSQL tier: a real server, the real tables, no fake in sight.
 
-Everything here is skipped while ``MENU_EVENTS_TEST_DSN`` is unset. That is the
-honest state on a machine with no database, and it is why the SQL in
-``store/postgres.py`` and ``projections/postgres.py`` carries a second tier:
+Everything here is skipped while ``MENU_EVENTS_TEST_DSN`` is unset, so a green run
+on a machine with no database says nothing about either adapter. That is why the
+SQL in ``store/postgres.py`` and ``projections/postgres.py`` carries a second tier:
 neither file can be reached by the unit tests without lying about what it does.
-See README.md for the scratch database these tests expect.
+The tier has been run, against PostgreSQL 16.15 in a throwaway container, and what
+one run does not settle is stated in each of those files. See README.md for the
+scratch database these tests expect.
 """
 
 from __future__ import annotations

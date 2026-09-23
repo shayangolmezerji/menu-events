@@ -9,10 +9,14 @@ the lock is held and the lock is released only once the rows and the checkpoint
 are written.
 
 The fold behind both writers is tested event by event in
-:mod:`menu_events.projections.menu`. Moving the rows is not: with no server in the
-development environment, ``tests/integration/test_projection_postgres.py`` skips
-while ``MENU_EVENTS_TEST_DSN`` is unset, so the locking argument above has never
-met a database.
+:mod:`menu_events.projections.menu`. Moving the rows is tested against a server in
+``tests/integration/test_projection_postgres.py``, which skips while
+``MENU_EVENTS_TEST_DSN`` is unset, and the locking argument above has met one too:
+``test_projection_concurrency_postgres.py`` races two writers over one stream and
+each of them leaves a projection equal to a fold of the log. So the writers do
+exclude each other, on one server, which is the whole of what that measures. A
+projection running while a command appends is the other half of the paragraph
+above, and no test has put those two locks in each other's way.
 """
 
 from __future__ import annotations

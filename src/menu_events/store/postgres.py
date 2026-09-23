@@ -12,11 +12,15 @@ out which one of them is late instead of both discovering it after a failed
 insert; the primary key on ``(stream_id, version)`` is the backstop for any
 writer that reached the table without the lock.
 
-None of that has been executed. There is no PostgreSQL server in the development
-environment, so ``tests/integration/test_event_store_postgres.py`` is written for
-these statements and skips while ``MENU_EVENTS_TEST_DSN`` is unset: every claim
-above is read out of the SQL and psycopg's documented behaviour, and none of it is
-measured.
+Most of that is measured now. ``tests/integration/test_event_store_postgres.py``
+sends these statements to a PostgreSQL 16.15 server and skips only while
+``MENU_EVENTS_TEST_DSN`` is unset, which is this machine's state without a
+container up: the trigger has refused an ``UPDATE`` and a ``DELETE`` from a
+superuser whom the grants could not have bound, and the log has been seen to hold
+a price no projection column downstream can store. The race above is not
+measured. Every test in that tier is one writer at a time, so two transactions
+have never asked for this lock together, and the primary key has stayed a backstop
+nothing reached.
 """
 
 from __future__ import annotations
