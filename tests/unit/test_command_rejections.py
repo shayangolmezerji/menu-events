@@ -5,8 +5,10 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from pydantic import ValidationError
 
-from menu_events import AddMenuItem, menu_stream_id
+from menu_events import AddMenuItem, menu_stream_id, project
+from menu_events.domain.commands import MAX_PRICE_CENTS
 from menu_events.domain.errors import (
     CommandRejected,
     ItemAlreadyOnMenu,
@@ -15,6 +17,7 @@ from menu_events.domain.errors import (
     ItemNotSoldOut,
     MenuStreamNotFound,
 )
+from menu_events.domain.events import PriceChanged
 
 
 def test_a_second_add_for_an_item_id_already_on_the_menu_is_refused(
@@ -122,6 +125,57 @@ def test_writing_the_value_an_item_already_holds_is_still_recorded(
 
     assert result.menu_version == 2
     assert store.read(stream_id)[1].event.reason == "checked against the till"
+
+
+def test_a_price_above_the_ceiling_is_refused_by_both_price_commands(commands):
+    """The ceiling has to be on the command because nothing downstream can be:
+    ``events.payload`` is jsonb and holds any magnitude, so a price with no upper
+    bound is caught nowhere until a projection column refuses it.
+    """
+    fries = uuid.uuid4()
+
+    with pytest.raises(ValidationError, match="less than or equal to"):
+        commands.add(fries, 0, price_cents=MAX_PRICE_CENTS + 1)
+    with pytest.raises(ValidationError, match="less than or equal to"):
+        commands.price(fries, 1, MAX_PRICE_CENTS + 1)
+
+
+def test_a_price_at_the_ceiling_and_one_below_it_are_written_and_read_back(
+    handler, store, stream_id, commands
+):
+    """The bound is inclusive, and the value comes back out of the canonical row
+    both adapters persist as the number that was written.
+    """
+    fries = uuid.uuid4()
+    handler.handle(commands.add(fries, 0, price_cents=MAX_PRICE_CENTS))
+    handler.handle(commands.price(fries, 1, MAX_PRICE_CENTS - 1))
+
+    assert [envelope.event.price_cents for envelope in store.read(stream_id)] == [
+        MAX_PRICE_CENTS,
+        MAX_PRICE_CENTS - 1,
+    ]
+
+
+def test_a_price_above_the_ceiling_already_in_the_log_is_still_read(
+    handler, store, stream_id, commands
+):
+    """A log written before the ceiling existed can hold a price no command would
+    accept now, above BIGINT besides. It stays readable: the event cannot be
+    edited or deleted, and a parser that refused it would leave the stream
+    unreadable to the command that was going to correct it.
+    """
+    fries = uuid.uuid4()
+    handler.handle(commands.add(fries, 0))
+    above_bigint = 2**64
+    store.append(
+        stream_id=stream_id,
+        expected_version=1,
+        event=PriceChanged(item_id=fries, actor="line-1", price_cents=above_bigint),
+        command_id=uuid.uuid4(),
+    )
+
+    assert store.read(stream_id)[1].event.price_cents == above_bigint
+    assert project(stream_id, store.read(stream_id)).get(fries).price_cents == above_bigint
 
 
 def test_a_retry_of_a_landed_command_lands_once(handler, store, stream_id, commands):

@@ -92,5 +92,10 @@ def parse_menu_event(data: object) -> MenuEvent:
     Raises ``pydantic.ValidationError`` for an unknown event_type, so a log
     entry written by a newer version of this package fails loudly on read
     instead of being skipped.
+
+    The commands' ceiling on ``price_cents`` is not one of those checks. A row
+    already in the log cannot be edited or deleted, so a fact this parser
+    refused would wedge its whole stream against every later read, including
+    the correction that would have superseded it.
     """
     return _MENU_EVENT.validate_python(data)

@@ -27,9 +27,16 @@ __all__ = [
     "ChangePrice",
     "Command",
     "EditDescription",
+    "MAX_PRICE_CENTS",
     "MarkSoldOut",
     "PutBackInStock",
 ]
+
+
+# 2**53 - 1: the largest integer a JSON number survives as exactly, far below the
+# BIGINT maximum of ``menu_item.price_cents`` and far above any price a menu has
+# carried. The reasoning, and the replay rule, are in README's "A price is bounded".
+MAX_PRICE_CENTS = 2**53 - 1
 
 
 class Command(BaseModel):
@@ -55,7 +62,7 @@ class Command(BaseModel):
 
 class AddMenuItem(Command):
     name: str = Field(min_length=1, max_length=120)
-    price_cents: int = Field(ge=0)
+    price_cents: int = Field(ge=0, le=MAX_PRICE_CENTS)
     description: str = Field(default="", max_length=2000)
     category: str = Field(default="menu", min_length=1, max_length=60)
 
@@ -75,7 +82,7 @@ class AddMenuItem(Command):
 
 
 class ChangePrice(Command):
-    price_cents: int = Field(ge=0)
+    price_cents: int = Field(ge=0, le=MAX_PRICE_CENTS)
 
     event_type: ClassVar[str] = "price_changed"
 

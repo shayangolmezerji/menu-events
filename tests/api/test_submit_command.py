@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from menu_events.domain.commands import Command
+from menu_events.domain.commands import MAX_PRICE_CENTS, Command
 
 pytestmark = pytest.mark.api
 
@@ -44,6 +44,20 @@ def test_the_version_a_read_returns_is_the_one_the_next_write_claims(client, bod
 
     assert response.status_code == 200
     assert response.json()["menu_version"] == head["version"] + 1
+
+
+def test_a_price_at_the_ceiling_comes_back_as_the_same_number(client, bodies):
+    """The ceiling is the largest integer a JSON number is exact for, so the wire
+    is where that claim gets checked: a read that rendered the price in
+    exponential form would not be the number the log holds.
+    """
+    fries = uuid.uuid4()
+    written = client.post("/commands", json=bodies.add(fries, 0, price_cents=MAX_PRICE_CENTS))
+    assert written.status_code == 200
+
+    read = client.get(f"/menu/{bodies.menu_id}")
+    assert read.json()["items"][0]["price_cents"] == MAX_PRICE_CENTS
+    assert str(MAX_PRICE_CENTS) in read.text
 
 
 def test_a_stale_write_loses_over_http_and_writes_nothing(client, bodies):

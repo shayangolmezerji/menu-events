@@ -11,6 +11,8 @@ import uuid
 
 import pytest
 
+from menu_events.domain.commands import MAX_PRICE_CENTS
+
 pytestmark = pytest.mark.api
 
 
@@ -84,6 +86,7 @@ def test_reading_the_log_of_a_menu_that_does_not_exist_is_not_found(client, menu
     [
         ("event_type", "sold_a_thing", "is not a command"),
         ("price_cents", "ten", "should be a valid integer"),
+        ("price_cents", MAX_PRICE_CENTS + 1, "less than or equal to"),
         ("expected_menu_version", -1, "greater than or equal to 0"),
         ("actor", "", "at least 1 character"),
         ("wrong_field", True, "Extra inputs are not permitted"),
@@ -97,6 +100,21 @@ def test_a_body_the_command_models_refuse_is_a_422(client, bodies, field, value,
 
     assert response.status_code == 422
     assert why in str(response.json())
+
+
+def test_a_price_above_the_ceiling_writes_nothing(client, bodies):
+    """One past the BIGINT maximum of ``menu_item.price_cents``, which is the
+    value no layer used to refuse. The answer is a 422 and the log is untouched,
+    because a price the domain refuses never reaches an adapter at all.
+    """
+    fries = uuid.uuid4()
+    client.post("/commands", json=bodies.add(fries, 0))
+
+    response = client.post("/commands", json=bodies.price(fries, 1, 2**63 + 1))
+
+    assert response.status_code == 422
+    assert "less than or equal to" in str(response.json())
+    assert client.get(f"/menu/{bodies.menu_id}").json()["version"] == 1
 
 
 def test_a_body_without_the_tag_is_a_422(client, bodies):
