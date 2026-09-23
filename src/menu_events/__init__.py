@@ -3,7 +3,9 @@
 The portable parts are re-exported here: the domain types, the store port, the
 in-memory adapter and the projection fold. The PostgreSQL adapters are not, so
 that ``import menu_events`` never reaches for a database driver. Get them from
-``menu_events.store.postgres`` and ``menu_events.projections.postgres``.
+``menu_events.store.postgres`` and ``menu_events.projections.postgres``. The
+same rule holds for the web framework: the app lives in ``menu_events.api``,
+out of this namespace, so importing this package never reaches for FastAPI.
 """
 
 from __future__ import annotations
