@@ -61,5 +61,7 @@ test modules do `from conftest import ...` and a combined path like
 in the package reads the file, so the value has to reach the process environment
 before `pytest` starts.
 
-The tier was run this way once, against PostgreSQL 16.15 on 2026-09-24: 13 tests,
-all passing.
+The tier was last run this way on 2026-09-24, against PostgreSQL 16.15 in a
+throwaway container: 15 tests, all passing. Two of those 15 race two projection
+writers against each other, so they are the ones to re-run if anything in
+`projections/postgres.py` changes.
