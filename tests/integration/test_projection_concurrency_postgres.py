@@ -3,8 +3,9 @@
 ``projections/postgres.py`` argues that both writers take one advisory lock per
 stream and read the log only once they hold it, and that this ordering is what
 makes them safe to run at the same time as each other. No other test here checks
-that: the rest of the tier runs one writer at a time, so the lock is taken and
-released by a single transaction and never waited on behind a second.
+that: the only other concurrent writers in the tier race commands on the log, and
+that lock is keyed on a different value, so the projection lock is taken and
+released by a single transaction here and never waited on behind a second.
 
 Measured here on PostgreSQL 16.15.
 

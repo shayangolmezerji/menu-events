@@ -8,19 +8,26 @@ What has been executed is not all of what is argued here. The version rule, the
 idempotency rule and the fold run in the unit tier, against the in-memory adapter, and
 they run again over HTTP in the api tier, in process.
 
-The PostgreSQL tier has run since this record was accepted. Fifteen tests on
-PostgreSQL 16.15 on 2026-09-24, both migrations applied through psycopg, most recently
-on the `postgres:16.15-alpine` image `ci.yml` names. That reaches the append-only
-trigger, which refused an `UPDATE` and a `DELETE` from a superuser that grants could
-not have bound, the no-partial-write on a refused append, the projector's own
-transaction rolling back whole, and the projection advisory lock under two writers on
-one stream.
+The PostgreSQL tier has run since this record was accepted. Eighteen tests on
+PostgreSQL 16.15 on 2026-09-24, both migrations applied through psycopg, most
+recently on the `postgres:16.15-alpine` image `ci.yml` names. That reaches the
+append-only trigger, which refused an `UPDATE` and a `DELETE` from a superuser that
+grants could not have bound, the no-partial-write on a refused append, the
+projector's own transaction rolling back whole, the projection advisory lock under
+two writers on one stream, and `store.append` under two writers at one version: one
+event landed per round, the other command was refused, and its `command_id` was
+absent from the table. Taking each guard out in turn says which of those answers to
+which. Without the version check both writers land, each at the head it read for
+itself, on consecutive versions the primary key finds nothing wrong with; that is
+red in six patched runs of six. Without only the advisory lock the two-writer race
+survives, and it is the retried command that breaks, refused as stale by a check
+whose duplicate lookup ran before the first copy committed: eighteen of twenty-six
+patched runs.
 
-Two claims above are still read rather than run. Nothing connects as `menu_app`, so the
+One claim above is still read rather than run. Nothing connects as `menu_app`, so the
 `REVOKE UPDATE, DELETE, TRUNCATE` in `migrations/0001_event_store.sql` has never been
-the thing that stopped a statement: the tier proves only the trigger beneath it. And
-`store.append` has never faced two writers at once, so its lock-then-check argument
-rests on the unit tier's in-memory version of the same rule.
+the thing that stopped a statement: the tier proves only the trigger beneath it. Nor
+has any test put a projector's lock and a command's lock in each other's way.
 
 ## Context
 

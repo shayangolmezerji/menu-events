@@ -17,10 +17,21 @@ sends these statements to a PostgreSQL 16.15 server and skips only while
 ``MENU_EVENTS_TEST_DSN`` is unset, which is this machine's state without a
 container up: the trigger has refused an ``UPDATE`` and a ``DELETE`` from a
 superuser whom the grants could not have bound, and the log has been seen to hold
-a price no projection column downstream can store. The race above is not
-measured. Every test in that tier is one writer at a time, so two transactions
-have never asked for this lock together, and the primary key has stayed a backstop
-nothing reached.
+a price no projection column downstream can store. The race above is measured by
+``tests/integration/test_append_concurrency_postgres.py``, run on 2026-09-24: two
+writers released at the version both of them read, and one event per round in
+every one of them, with the loser's ``command_id`` absent from the table. Which
+guard refused it was settled by patching each one out, and they are not
+interchangeable. Without the version check both writers land, each at the head it
+read for itself, so they take consecutive versions and the key on
+``(stream_id, version)`` has nothing to object to: the state the backstop was
+never for, red in six patched runs of six. Without the advisory lock the
+two-writer race survives, a writer that reaches the table second being refused by
+the head read or caught by the key with the same answer either way. The retried
+command is what the lock is for: without it that command's duplicate lookup can
+run before the first copy commits, and the retry comes back refused as stale
+instead of handed the original result. With both guards in place the key on
+``(stream_id, version)`` is still a backstop nothing in the tier has reached.
 """
 
 from __future__ import annotations
