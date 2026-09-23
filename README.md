@@ -37,7 +37,7 @@ The write path and the read path are separate (CQRS). A command is validated and
 
 ## Requirements
 
-- Python 3.12 or newer. The CI matrix runs 3.12 and 3.13.
+- Python 3.12 or newer. `.github/workflows/ci.yml` names 3.12 and 3.13.
 - `psycopg[binary]` and `pydantic`, installed with the package.
 - A PostgreSQL server only for the integration tier. The unit tests and every example on this page need none.
 
@@ -46,13 +46,13 @@ The write path and the read path are separate (CQRS). A command is validated and
 From a clean checkout:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv  # Windows: python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 ```
 
-On a machine with no database the last line reports `59 passed, 10 skipped`. The 10 skips are the PostgreSQL tier; see [Testing](#testing). To lint:
+On a machine with no database the last line reports `60 passed, 10 skipped`. The 10 skips are the PostgreSQL tier; see [Testing](#testing). To lint:
 
 ```bash
 ruff check .
@@ -148,6 +148,8 @@ The in-memory tier is executed on any machine. Every example on this page runs a
 
 The PostgreSQL tier is not executed here. There is no server in the development environment, so `pytest` skips all 10 integration tests, and a green run without a database proves nothing about `store/postgres.py` or `projections/postgres.py`. The SQL, the append-only trigger, and the advisory-lock concurrency control in those files are unverified until someone runs the tier against a real server.
 
+The workflow is defined, not executed. Nothing has been pushed, so no job has produced a result, and the file starts no database: a green there would carry exactly the weight described above, and no more. Its two commands are the ones this page shows, and both were run locally, on 3.13. No 3.12 interpreter was available here, so the lower bound of the version range comes from `requires-python` and not from a run.
+
 To exercise it, start a local PostgreSQL and point the DSN at a scratch database:
 
 ```bash
@@ -158,7 +160,7 @@ export MENU_EVENTS_TEST_DSN="host=localhost dbname=menu_events_scratch user=post
 pytest tests/integration
 ```
 
-These match `tests/integration/README.md`. The log is append-only, so nothing here cleans up after itself. Use a database you are willing to drop.
+These match `tests/integration/README.md`, and `.env.example` templates the same variable. The log is append-only, so nothing here cleans up after itself. Use a database you are willing to drop.
 
 ## License
 
