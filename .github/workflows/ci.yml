@@ -12,6 +12,40 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.12", "3.13"]
+    services:
+      postgres:
+        # A fresh server per job, destroyed when the job completes. Pinned to
+        # the exact minor the tier was certified against, the same way the
+        # actions below are pinned to exact commits.
+        image: postgres:16.15-alpine
+        env:
+          # Not a secret. trust means no POSTGRES_PASSWORD exists anywhere to
+          # leak; the database is empty at job start, holds only fixture rows,
+          # is published to this one ephemeral runner, and is discarded when
+          # the job ends. A fork's pull_request run can schedule this same
+          # container, which is exactly what it could also run on its own
+          # account: fork runs receive none of this repository's secrets.
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: menu_events_scratch
+        ports:
+          # Steps of a job running on the runner machine reach service
+          # containers at the mapped port on 127.0.0.1.
+          - 5432:5432
+        # GitHub waits for this health check before the first step, so the
+        # tier never races server startup.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # The tier's conftest skips everything on an empty value, so this is a
+      # literal no step can blank out and no fork has to invent. With it set,
+      # an unreachable server is a connection error in the tier, not a skip;
+      # the residual possibility of a skip is what the last step below turns
+      # red. 127.0.0.1 rather than localhost to keep the resolution off any
+      # IPv6 path a port mapping need not answer.
+      MENU_EVENTS_TEST_DSN: host=127.0.0.1 port=5432 dbname=menu_events_scratch user=postgres
     steps:
       # Actions are pinned to a commit rather than a moving major tag, so a
       # takeover of the upstream tag cannot change what runs on the runner.
@@ -32,6 +66,43 @@ jobs:
         run: python -m pytest -q tests/unit
       - name: Test the HTTP tier
         run: python -m pytest -q tests/api
-      # No database on the runner: the Postgres tier skips by design, not by accident.
+      # Both migrations, in order, as the same superuser role the tier then
+      # connects as: 0001 grants against menu_app and its append-only trigger
+      # has to fire for whoever runs the tier. Applied through the psycopg the
+      # dev extra already installed rather than a psql this job need not have:
+      # without parameters, execute() sends the whole file as one simple query,
+      # so a failure in any statement stops the step and leaves no half of the
+      # file behind.
+      - name: Apply the migrations
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+
+          import psycopg
+
+          with psycopg.connect(os.environ["MENU_EVENTS_TEST_DSN"], autocommit=True) as conn:
+              for path in ("migrations/0001_event_store.sql", "migrations/0002_projection.sql"):
+                  conn.execute(pathlib.Path(path).read_text())
+          PY
       - name: Test the Postgres tier
-        run: python -m pytest -q tests/integration
+        run: python -m pytest -q --junit-xml=integration-junit.xml tests/integration
+      # pytest exits 0 when a tier skips, even when every test in it skips, so
+      # the green step above is not yet evidence a server was consulted. The
+      # JUnit report is the check: any skipped case, or a tier that collected
+      # nothing at all, fails the job and prints what it found.
+      - name: Fail if the Postgres tier skipped
+        run: |
+          python - integration-junit.xml <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          cases = list(ET.parse(sys.argv[1]).getroot().iter("testcase"))
+          skipped = [c for c in cases if c.find("skipped") is not None]
+          for c in skipped:
+              print("SKIPPED %s::%s: %s" % (c.get("classname"), c.get("name"), c.find("skipped").get("message")))
+          if skipped or not cases:
+              print("the Postgres tier did not run against a server: %d skipped of %d collected" % (len(skipped), len(cases)))
+              sys.exit(1)
+          print("the Postgres tier ran %d tests against a server, none skipped" % len(cases))
+          PY
