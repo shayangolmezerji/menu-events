@@ -28,7 +28,14 @@ RECORDED_AT = datetime(2026, 3, 14, 19, 30, tzinfo=UTC)
 @pytest.fixture
 def create_app():
     """The factory itself, so a test can build a second app and compare logs."""
-    api = pytest.importorskip("menu_events.api", reason="the api extra is not installed")
+    # exc_type is not decoration. pytest 9.1 narrowed importorskip's default to
+    # ModuleNotFoundError, so a fastapi that is installed but raises ImportError
+    # on its way in would error the whole tier instead of skipping it.
+    api = pytest.importorskip(
+        "menu_events.api",
+        reason="the api extra is not installed",
+        exc_type=ImportError,
+    )
     return api.create_app
 
 
@@ -46,7 +53,9 @@ def app(create_app):
 def client_for():
     """A client bound to whichever app a test names. In process, no port."""
     testclient = pytest.importorskip(
-        "fastapi.testclient", reason="the api extra is not installed"
+        "fastapi.testclient",
+        reason="the api extra is not installed",
+        exc_type=ImportError,
     )
     return lambda app: testclient.TestClient(app)
 
