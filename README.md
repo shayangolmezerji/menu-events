@@ -63,7 +63,7 @@ pip install -e ".[dev,api]"
 pytest
 ```
 
-On a machine with no database the last line reports `100 passed, 10 skipped`. The 10 skips are the PostgreSQL tier; see [Testing](#testing). Without the `api` extra the HTTP tier skips too and the line reads `63 passed, 47 skipped`. To lint:
+On a machine with no database the last line reports `100 passed, 13 skipped`. The 13 skips are the PostgreSQL tier; see [Testing](#testing). Without the `api` extra the HTTP tier skips too and the line reads `63 passed, 50 skipped`. To lint:
 
 ```bash
 ruff check .
@@ -176,7 +176,7 @@ Retrying a command that already landed is not a conflict. The handler matches on
 
 The check lives where a command is built, which is what makes the answer the same on either store: a body over the ceiling is one of the 422s `menu_events.api` already gives for a field the models refuse, and nothing is appended. Without it the refusal would come one step later and on one tier only, because `events.payload` is `jsonb` and holds any magnitude. A price too large for `menu_item.price_cents` would reach the log, be answered 200, and surface as a failed `INSERT` in whichever projection run carried that version.
 
-The read side does not repeat the check. That is a decision, not an oversight. An event already in the log cannot be edited or deleted, so a parser that refused one would leave its whole stream unreadable, including to the later command that would have superseded the price. A pre-bound value above BIGINT is therefore a projection failure and not a read failure. `advance` writes the item at every version in the tail, so it fails on the bad row and the checkpoint stays where it was; `rebuild` folds the stream first and writes where each item ended, so a correction on the stream is enough for it to succeed. Those last two sentences are read out of `projections/postgres.py`, which no server has run here.
+The read side does not repeat the check. That is a decision, not an oversight. An event already in the log cannot be edited or deleted, so a parser that refused one would leave its whole stream unreadable, including to the later command that would have superseded the price. A pre-bound value above BIGINT is therefore a projection failure and not a read failure. `advance` writes the item at every version in the tail, so it fails on the bad row and the checkpoint stays where it was; `rebuild` folds the stream first and writes where each item ended, so a correction on the stream is enough for it to succeed. Both halves of that were run against PostgreSQL 16.15: `advance` died in the item insert with `psycopg.errors.NumericValueOutOfRange`, in the server's words `bigint out of range`, and left the checkpoint at the version it had been with no partial row behind it, because the run's own checkpoint write rolled back with the item. A correction appended after the bad version does not free `advance`, which re-reads from its checkpoint and so meets the overflowing row again on every run, while `rebuild` folded all three versions and wrote the item at the corrected price. `tests/integration/test_price_overflow_postgres.py` is that sequence, re-runnable.
 
 ### Over HTTP
 
@@ -367,7 +367,7 @@ Three tiers, and two of them need no server. The unit tier runs the whole portab
 The HTTP tier drives `menu_events.api` in process over that same store. No port is bound and no host is resolved. It submits every command the domain has, covers each endpoint and each status the error mapping can answer with, and shows a stale write losing over the wire rather than only in process. Where the `api` extra is not installed the tier skips instead of erroring: the package imports no web framework, so a test run should not claim a machine has one.
 
 ```bash
-pytest                      # 94 passed, 10 skipped with no database
+pytest                      # 100 passed, 13 skipped with no database
 pytest tests/unit           # the portable core
 pytest tests/api            # the HTTP tier
 pytest -m "not integration" # everything a machine without a server can run
@@ -379,18 +379,22 @@ The two tiers that need no server are executed on any machine, and every Python 
 
 The HTTP transcripts came from a process, not a test client. `uvicorn --factory menu_events.api:create_app` was started on a localhost port, every request and response quoted above is what that exchange carried, and the server's own access log shows the 200s, the 409, the two 404s and the 422. What has not been served is the app over `PostgresEventStore`: the factory was only ever handed the in-memory adapter here.
 
-The PostgreSQL tier is not executed here. There is no server in the development environment, so `pytest` skips all 10 integration tests, and a green run without a database proves nothing about `store/postgres.py` or `projections/postgres.py`. The SQL, the append-only trigger, and the advisory-lock concurrency control in those files are unverified until someone runs the tier against a real server.
+The PostgreSQL tier has been run. All 13 tests passed on 2026-09-24 against PostgreSQL 16.15 in a throwaway container, so the SQL in `store/postgres.py` and `projections/postgres.py` has been executed, and so has the append-only trigger that `migrations/0001_event_store.sql` calls the load-bearing half: it refused `UPDATE` and `DELETE` for a superuser, whom grants cannot bind. A green run with no database still proves nothing about those files, because the tier skips while `MENU_EVENTS_TEST_DSN` is unset. Contention is the part the run did not reach. Every test there is one writer at a time, so the advisory lock has been taken and released by real transactions and never raced, and the concurrency argument in `store/postgres.py` still rests on the unit tier's in-memory version of it.
 
-The workflow is defined, not executed. Nothing has been pushed, so no job has produced a result, and the file starts no database: a green there would carry exactly the weight described above, and no more. Every command in it was run locally on 3.13: the install line, `ruff check .`, the import check, and one `pytest` run per tier, which is how the integration tier's 10 skips are known to be skips and not failures returning zero. No linter for the workflow file itself is installed here, so `ci.yml` was parsed and read but never checked by `actionlint` or `yamllint`. No 3.12 interpreter was available either, so the lower bound of the version range comes from `requires-python` and not from a run.
+The workflow is defined, not executed. Nothing has been pushed, so no job has produced a result, and the file starts no database: a green there would carry exactly the weight described above, and no more. Every command in it was run locally on 3.13: the install line, `ruff check .`, the import check, and one `pytest` run per tier, which is how the integration tier's 13 skips are known to be skips and not failures returning zero. No linter for the workflow file itself is installed here, so `ci.yml` was parsed and read but never checked by `actionlint` or `yamllint`. No 3.12 interpreter was available either, so the lower bound of the version range comes from `requires-python` and not from a run.
 
-To exercise it, start a local PostgreSQL and point the DSN at a scratch database:
+To exercise it, bring up a server and point the DSN at a scratch database. This machine has no `createdb` or `psql`, so the server and its client both come from the container:
 
 ```bash
-createdb menu_events_scratch
-psql menu_events_scratch -f migrations/0001_event_store.sql
-psql menu_events_scratch -f migrations/0002_projection.sql
-export MENU_EVENTS_TEST_DSN="host=localhost dbname=menu_events_scratch user=postgres"
+docker run -d --name menu-events-pg -e POSTGRES_HOST_AUTH_METHOD=trust \
+    -e POSTGRES_DB=menu_events_scratch -p 127.0.0.1:5544:5432 postgres:16-alpine
+docker exec -i menu-events-pg psql -U postgres -d menu_events_scratch \
+    -v ON_ERROR_STOP=1 -f - < migrations/0001_event_store.sql
+docker exec -i menu-events-pg psql -U postgres -d menu_events_scratch \
+    -v ON_ERROR_STOP=1 -f - < migrations/0002_projection.sql
+export MENU_EVENTS_TEST_DSN="host=127.0.0.1 port=5544 dbname=menu_events_scratch user=postgres"
 pytest tests/integration
+docker rm -f menu-events-pg
 ```
 
 These match `tests/integration/README.md`, and `.env.example` templates the same variable. The log is append-only, so nothing here cleans up after itself. Use a database you are willing to drop.
