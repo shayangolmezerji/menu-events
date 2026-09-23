@@ -6,6 +6,8 @@ import uuid
 
 import pytest
 
+from menu_events.domain.commands import Command
+
 pytestmark = pytest.mark.api
 
 
@@ -101,3 +103,44 @@ def test_a_second_app_starts_from_an_empty_log(client, client_for, create_app, b
 
     assert other.get(f"/menu/{bodies.menu_id}").status_code == 404
     assert client.get(f"/menu/{bodies.menu_id}").status_code == 200
+
+
+def test_every_command_the_library_has_can_be_submitted(client, bodies):
+    """The dispatch table is written by hand, so a command added to the domain
+    without a tag would answer 422 over HTTP forever while every unit test stayed
+    green. This one notices, because the fold has to reach the last event.
+    """
+    fries = uuid.uuid4()
+    shift = [
+        bodies.add(fries, 0, name="Duck fat fries"),
+        bodies.describe(fries, 1, "Salted thrice, fried twice."),
+        bodies.price(fries, 2, 1150, reason="potato cost up"),
+        bodies.sold_out(fries, 3),
+        bodies.back_in_stock(fries, 4),
+    ]
+    for body in shift:
+        assert client.post("/commands", json=body).status_code == 200
+
+    assert [
+        event["event"]["event_type"]
+        for event in client.get(f"/menu/{bodies.menu_id}/events").json()
+    ] == [
+        "menu_item_added",
+        "description_edited",
+        "price_changed",
+        "item_sold_out",
+        "item_back_in_stock",
+    ]
+    assert client.get(f"/menu/{bodies.menu_id}").json()["items"][0]["sold_out"] is False
+
+
+def test_the_tags_the_api_lists_are_the_commands_the_domain_has(client):
+    """A refusal names the whole table, so the table is observable without
+    reaching into the module that holds it.
+    """
+    response = client.post("/commands", json={"event_type": "sold_a_thing"})
+
+    assert response.status_code == 422
+    listed = str(response.json())
+    for command_type in Command.__subclasses__():
+        assert command_type.event_type in listed

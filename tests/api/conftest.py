@@ -119,6 +119,18 @@ class CommandBodies:
             reason=reason,
         )
 
+    def describe(
+        self,
+        item_id: uuid.UUID,
+        version: int,
+        description: str,
+        *,
+        command_id: uuid.UUID | None = None,
+    ) -> dict[str, object]:
+        return self._base(
+            "description_edited", item_id, version, command_id=command_id, description=description
+        )
+
     def sold_out(
         self,
         item_id: uuid.UUID,
@@ -127,6 +139,15 @@ class CommandBodies:
         command_id: uuid.UUID | None = None,
     ) -> dict[str, object]:
         return self._base("item_sold_out", item_id, version, command_id=command_id)
+
+    def back_in_stock(
+        self,
+        item_id: uuid.UUID,
+        version: int,
+        *,
+        command_id: uuid.UUID | None = None,
+    ) -> dict[str, object]:
+        return self._base("item_back_in_stock", item_id, version, command_id=command_id)
 
     def _base(
         self,

@@ -63,7 +63,7 @@ pip install -e ".[dev,api]"
 pytest
 ```
 
-On a machine with no database the last line reports `92 passed, 10 skipped`. The 10 skips are the PostgreSQL tier; see [Testing](#testing). Without the `api` extra the HTTP tier skips too and the line reads `60 passed, 42 skipped`. To lint:
+On a machine with no database the last line reports `94 passed, 10 skipped`. The 10 skips are the PostgreSQL tier; see [Testing](#testing). Without the `api` extra the HTTP tier skips too and the line reads `60 passed, 44 skipped`. To lint:
 
 ```bash
 ruff check .
@@ -72,7 +72,7 @@ ruff check .
 ## Running the Service
 
 ```bash
-uvicorn --factory menu_events.api:create_app --host 127.0.0.1 --port 8000
+uvicorn --factory menu_events.api:create_app --host 127.0.0.1 --port 8077
 ```
 
 ```
@@ -82,7 +82,7 @@ INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8077 (Press CTRL+C to quit)
 ```
 
-That call was run, on 3.13, and the transcript in [Usage](#usage) came from the process it started. The port differs because the run used `--port 8077` to stay out of the way of anything already listening on 8000.
+That is the command that was run, on 3.13, and the transcript in [Usage](#usage) came from the process it started. The port is arbitrary; every request below names the one that was listening.
 
 `create_app()` with no arguments serves an `InMemoryEventStore`: a log per process, gone on restart. It is the right default for the tests and for trying the routes, and the wrong one for anything that has to keep a menu. To serve the PostgreSQL adapter, build the app in your own entry point:
 
@@ -94,7 +94,6 @@ app = create_app(PostgresEventStore("host=localhost dbname=menu_events_scratch")
 ```
 
 Point `uvicorn` at that module instead of using `--factory`. This snippet has not been run: it needs a server, and the DSN is the shape `tests/integration/README.md` describes rather than one that answers here. Interactive docs are at `/docs` once the app is serving.
-
 
 ## Usage
 
@@ -357,10 +356,10 @@ Nothing here authenticates. A deployment that needs it puts a gateway in front, 
 
 Three tiers, and two of them need no server. The unit tier runs the whole portable core (commands, handler, idempotency, concurrency, the fold) against `InMemoryEventStore`. That store is not a bag of live model objects: rows go through the same `to_row` and `from_row` the PostgreSQL adapter uses, so a serialization bug surfaces here as it would against a real database.
 
-The HTTP tier drives `menu_events.api` in process over that same store. No port is bound and no host is resolved. It covers each endpoint, each status the error mapping can answer with, and a stale write losing over the wire rather than only in process. Where the `api` extra is not installed the tier skips instead of erroring: the package imports no web framework, so a test run should not claim a machine has one.
+The HTTP tier drives `menu_events.api` in process over that same store. No port is bound and no host is resolved. It submits every command the domain has, covers each endpoint and each status the error mapping can answer with, and shows a stale write losing over the wire rather than only in process. Where the `api` extra is not installed the tier skips instead of erroring: the package imports no web framework, so a test run should not claim a machine has one.
 
 ```bash
-pytest                      # 92 passed, 10 skipped with no database
+pytest                      # 94 passed, 10 skipped with no database
 pytest tests/unit           # the portable core
 pytest tests/api            # the HTTP tier
 pytest -m "not integration" # everything a machine without a server can run
