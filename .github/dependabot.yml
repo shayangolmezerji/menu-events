@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # The CI actions are pinned to commit SHAs, which means nothing moves them on
+  # its own. This is what turns the pins into a maintainable choice rather than
+  # a slow rot.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Resolver only: these PRs are opened against a project with no deployed
+  # service, so they exist to keep the lockfile honest, not to be merged blind.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
