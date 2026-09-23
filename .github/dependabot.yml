@@ -11,8 +11,9 @@ updates:
       actions:
         patterns: ["*"]
 
-  # Resolver only: these PRs are opened against a project with no deployed
-  # service, so they exist to keep the lockfile honest, not to be merged blind.
+  # Resolver only: there is no lockfile in this repository, so what these PRs
+  # buy is early notice of a breaking upstream release. They are not meant to be
+  # merged blind; the CI matrix on the other leg is what actually runs the code.
   - package-ecosystem: pip
     directory: /
     schedule:

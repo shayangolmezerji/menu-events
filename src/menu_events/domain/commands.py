@@ -33,9 +33,12 @@ __all__ = [
 ]
 
 
-# 2**53 - 1: the largest integer a JSON number survives as exactly, far below the
-# BIGINT maximum of ``menu_item.price_cents`` and far above any price a menu has
-# carried. The reasoning, and the replay rule, are in README's "A price is bounded".
+# 2**53 - 1: the largest safe integer, the last one every IEEE-754 double holds
+# exactly. A client that parses JSON numbers as doubles rounds past it, so this
+# keeps the log, the BIGINT column and that client on the same digits. Well below
+# the ``menu_item.price_cents`` maximum and well above any price a menu has
+# carried. The reasoning, and the replay rule, are in README's "A price is
+# bounded".
 MAX_PRICE_CENTS = 2**53 - 1
 
 
