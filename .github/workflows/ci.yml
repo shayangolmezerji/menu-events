@@ -66,8 +66,10 @@ jobs:
         run: ruff check .
       # The api tier skips instead of failing where fastapi is absent, so a green
       # run there could mean the extra never resolved. Say which of the two it was.
+      # The test client is named alongside it because the tier builds its client
+      # through that module and starlette does not declare a dependency on it.
       - name: Check the api extra resolved
-        run: python -c "import fastapi, menu_events.api"
+        run: python -c "import fastapi, fastapi.testclient, menu_events.api"
       - name: Test the portable core
         run: python -m pytest -q tests/unit
       - name: Test the HTTP tier

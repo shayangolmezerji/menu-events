@@ -21,6 +21,14 @@ dependencies = [
 api = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
+    # ``fastapi.testclient`` is starlette's ``TestClient``, and starlette imports
+    # an httpx at module level without declaring one: without this the tier has
+    # no client to build. httpx over the httpx2 newer starlette prefers because
+    # an older one, still resolvable under the fastapi floor above, knows only
+    # httpx, and its ModuleNotFoundError reads to the tier's importorskip as a
+    # missing extra, which skips 37 tests instead of failing them. 0.27 is the
+    # floor starlette's own test-client extra names for this import path.
+    "httpx>=0.27",
 ]
 dev = [
     "pytest>=8.3",
