@@ -61,11 +61,16 @@ test modules do `from conftest import ...` and a combined path like
 in the package reads the file, so the value has to reach the process environment
 before `pytest` starts.
 
-The tier was last run on 2026-09-24, against PostgreSQL 16.15 in a throwaway
+The tier ran here on 2026-09-24, against PostgreSQL 16.15 in a throwaway
 container: 18 tests, all passing. That run published the port
 `.github/workflows/ci.yml` names and applied both migrations through the
 repository's own `psycopg` rather than the container's `psql`, which is the other
-way the file above says to do it. Two of the 18 race two projection writers
+way the file above says to do it. On 2026-09-26 the same 18 passed on a
+GitHub-hosted runner in run `36257941725`, against the `postgres:16.15-alpine`
+service that workflow declares, on both 3.12 and 3.13. That is the first time
+this SQL met a server that is not this machine, and it connects as the same
+superuser the container runs do, so the grants `0001` writes still bind nothing
+there. Two of the 18 race two projection writers
 against each other, so they are the ones to re-run if anything in
 `projections/postgres.py` changes. Three race two writers on the log, and those
 are the ones to re-run if the advisory lock or the version check in
